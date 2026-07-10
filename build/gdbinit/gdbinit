@@ -1,0 +1,2 @@
+source D:/uart_bare_metal/uart_bare_metal/build/gdbinit/symbols
+source D:/uart_bare_metal/uart_bare_metal/build/gdbinit/connect
