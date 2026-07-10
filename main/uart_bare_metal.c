@@ -12,7 +12,7 @@
 #define LED_PIN     2
 #define LED_BIT     (1 << LED_PIN)
 
-#define BAUD_CLK_DIVIDER    694   // 115200 baud
+#define BAUD_CLK_DIVIDER    694
 
 #define DPORT_PERIP_CLK_EN_REG   (*((volatile uint32_t *)0x3FF000C0))
 #define DPORT_PERIP_RST_EN_REG   (*((volatile uint32_t *)0x3FF000C4))
@@ -76,28 +76,33 @@ void app_main(void) {
     GPIO_ENABLE_REG |= LED_BIT;
 
     uart0_init();
-
-    uart1_enable_clock();   // <-- critical: enable UART1 before touching its registers
+    uart1_enable_clock();
     uart1_init();
 
     esp_rom_gpio_connect_out_signal(17, U1TXD_OUT_IDX, false, false);
     esp_rom_gpio_connect_in_signal(16, U1RXD_IN_IDX, false);
     GPIO_ENABLE_REG |= (1 << 17);
 
-    uart0_puts("UART1 loopback test starting\r\n");
+    uart0_puts("Stage 5 - UART command demo\r\n");
     uart0_puts("Make sure GPIO17 is jumpered to GPIO16\r\n");
+    uart0_puts("Alternating 'led on' / 'led off' over UART1...\r\n");
 
     int counter = 0;
+    int should_turn_on = 1;
+
     while (1) {
-        GPIO_OUT_REG |= LED_BIT;
-        vTaskDelay(200 / portTICK_PERIOD_MS);
-        GPIO_OUT_REG &= ~LED_BIT;
         vTaskDelay(200 / portTICK_PERIOD_MS);
 
         counter++;
-        if (counter % 5 == 0) {
-            uart0_puts("Sending 'hello' on UART1...\r\n");
-            uart1_puts("hello\r\n");
+        if (counter % 10 == 0) {
+            if (should_turn_on) {
+                uart0_puts("Sending: led on\r\n");
+                uart1_puts("led on\r\n");
+            } else {
+                uart0_puts("Sending: led off\r\n");
+                uart1_puts("led off\r\n");
+            }
+            should_turn_on = !should_turn_on;
         }
 
         char c;
@@ -105,9 +110,21 @@ void app_main(void) {
             if (c == '\r' || c == '\n') {
                 if (rx_index > 0) {
                     rx_buffer[rx_index] = '\0';
-                    uart0_puts("UART1 received: ");
+
+                    uart0_puts("Received command: ");
                     uart0_puts(rx_buffer);
                     uart0_puts("\r\n");
+
+                    if (strcmp(rx_buffer, "led on") == 0) {
+                        GPIO_OUT_REG |= LED_BIT;
+                        uart0_puts("-> LED ON\r\n");
+                    } else if (strcmp(rx_buffer, "led off") == 0) {
+                        GPIO_OUT_REG &= ~LED_BIT;
+                        uart0_puts("-> LED OFF\r\n");
+                    } else {
+                        uart0_puts("-> Unknown command\r\n");
+                    }
+
                     rx_index = 0;
                 }
             } else if (rx_index < (int)sizeof(rx_buffer) - 1) {
